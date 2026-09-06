@@ -25,7 +25,7 @@ def load(path):
 def pick(row, *names):
     low = {(k or "").strip().lower(): v for k, v in row.items()}
     for n in names:
-        if n in low:
+        if n in low and (low[n] or "").strip():
             return (low[n] or "").strip()
     return ""
 
@@ -38,6 +38,33 @@ def to_int(v):
         return int(float(v))
     except ValueError:
         return None
+
+
+def plan_key(row):
+    contract = pick(row, "contract id", "contract_id", "contractid").upper()
+    plan = pick(row, "plan id", "plan_id", "planid")
+    segment = pick(row, "segment id", "segment_id")
+    if not contract or not plan:
+        raise ValueError("Contract ID and Plan ID are required for a plan-level join")
+    return contract, plan.zfill(3), segment.zfill(3) if segment else ""
+
+
+def metadata(row):
+    return {
+        "organisation": pick(row, "parent organization", "organization marketing name",
+                             "organization name"),
+        "plan_type": pick(row, "plan type", "plan_type"),
+        "snp": pick(row, "special needs plan", "snp plan", "snp"),
+    }
+
+
+def snp_status(value):
+    value = value.strip().lower()
+    if value in ("yes", "y", "true", "d-snp", "c-snp", "i-snp"):
+        return True
+    if value in ("no", "n", "false", "non-snp"):
+        return False
+    return None
 
 
 def main():
@@ -55,28 +82,35 @@ def main():
     contracts = {}
     if a.contract_csv:
         for r in load(a.contract_csv):
-            cid = pick(r, "contract id", "contract_id", "contractid")
-            contracts[cid] = {
-                "organisation": pick(r, "organization marketing name", "parent organization",
-                                     "organization name"),
-                "plan_type": pick(r, "plan type", "plan_type"),
-                "snp": pick(r, "special needs plan", "snp plan"),
-            }
+            key = plan_key(r)
+            meta = metadata(r)
+            if key in contracts and contracts[key] != meta:
+                ap.exit(2, "Conflicting metadata for contract/plan/segment " + str(key) + "\n")
+            contracts[key] = meta
 
     suppressed = 0
+    unmatched = 0
     rows = []
     for r in enrol:
-        cid = pick(r, "contract id", "contract_id", "contractid")
-        meta = contracts.get(cid, {})
+        key = plan_key(r)
+        cid, pid, segment = key
+        meta = contracts.get(key) if a.contract_csv else metadata(r)
         if a.contract and cid != a.contract:
             continue
+        if meta is None:
+            unmatched += 1
+            if a.org:
+                ap.exit(2, "Unmatched plan metadata prevents a complete organization filter.\n")
+            meta = {}
+        if a.org and not meta.get("organisation"):
+            ap.exit(2, "Missing organization metadata prevents a complete organization filter.\n")
         if a.org and a.org.lower() not in (meta.get("organisation", "") or "").lower():
             continue
         n = to_int(pick(r, "enrollment", "enrolled"))
         if n is None:
             suppressed += 1
             continue
-        rows.append({"contract": cid, "plan": pick(r, "plan id", "plan_id"),
+        rows.append({"contract": cid, "plan": pid, "segment": segment,
                      "state": pick(r, "state"), "county": pick(r, "county"),
                      "enrollment": n, **meta})
 
@@ -90,18 +124,24 @@ def main():
         by_type = collections.Counter()
         by_state = collections.Counter()
         snp = 0
+        unknown_snp = 0
         for r in rows:
             by_contract[r["contract"]] += r["enrollment"]
             by_type[r.get("plan_type") or "unknown"] += r["enrollment"]
             by_state[r["state"]] += r["enrollment"]
-            if (r.get("snp") or "").strip().lower() in ("yes", "y", "true"):
+            status = snp_status(r.get("snp") or "")
+            if status is True:
                 snp += r["enrollment"]
+            elif status is None:
+                unknown_snp += r["enrollment"]
         total = sum(r["enrollment"] for r in rows)
         json.dump({
             "total_enrollment": total,
             "suppressed_cells": suppressed,
+            "unmatched_metadata_rows": unmatched,
+            "unknown_snp_enrollment": unknown_snp,
             "snp_enrollment": snp,
-            "snp_share": round(snp / total, 4) if total else None,
+            "snp_share": round(snp / total, 4) if total and not unknown_snp else None,
             "top_contracts": by_contract.most_common(15),
             "by_plan_type": by_type.most_common(),
             "top_states": by_state.most_common(15),
@@ -117,9 +157,12 @@ def main():
         }, sys.stdout, indent=2)
         print(); return
 
-    json.dump(rows if a.by_county else rows[:500], sys.stdout, indent=2)
+    json.dump(rows, sys.stdout, indent=2)
     print()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as exc:
+        sys.exit("Invalid enrollment input: " + str(exc))
