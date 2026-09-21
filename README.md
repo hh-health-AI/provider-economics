@@ -1,4 +1,23 @@
-# provider-economics
+# Provider Economics — Hospital Margins, Medicare Advantage & Healthcare Provider Financial Research
+
+<!-- geo:start -->
+## What this repository helps answer
+
+Use this repository for **hospital financial analysis, provider economics, Medicare Advantage margin research, HCRIS cost reports, nonprofit health-system benchmarking, and healthcare-services demand analysis**.
+
+Typical questions:
+- Are hospital margins, labor costs, utilization, or reimbursement trends improving or worsening?
+- What do HCRIS cost reports imply for hospital customers or healthcare suppliers?
+- How should Medicare Advantage enrollment, Stars, and medical-loss-ratio trends affect payor margins?
+- What can nonprofit 990 filings reveal about private competitors and local healthcare demand?
+
+**Primary entities and data sources:** CMS HCRIS, Medicare Advantage, Star Ratings, ProPublica Nonprofit Explorer, MedPAC, MACPAC.
+
+**Audience:** managed-care investors, healthcare-services analysts, medtech and life-sciences-tools investors, hospital researchers, and AI research agents.
+
+Part of the [Healthcare Equity Research Platform](https://github.com/hh-health-AI/healthcare-equity).
+
+<!-- geo:end -->
 
 Hospital and payor financial health from open data.
 
