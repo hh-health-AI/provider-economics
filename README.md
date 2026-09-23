@@ -81,3 +81,23 @@ Review them before use.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## MA enrollment joins
+
+MA metadata is joined on contract, plan and segment (when present), not contract
+alone. Use paired files for the same reporting month with matching key columns.
+Conflicting metadata fails instead of silently overwriting a plan. Missing SNP
+classification is reported as unknown; SNP share is null when it cannot be
+established for the observed population. Suppressed cells remain excluded and
+counted separately. Raw output includes all matched rows, rather than the first 500.
+
+## Regression tests
+
+Run offline with Python 3.10 or newer (standard library only):
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Tests use synthetic fixtures and mocked APIs; they do not certify live endpoint
+availability or current regulatory facts. GitHub Actions runs the same tests on PRs.
